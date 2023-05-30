@@ -94,7 +94,7 @@
 #include <variant>
 #include <vector>
 #include <version>
-#include <skee64\IPluginInterface.h>
+#include <skee64/IPluginInterface.h>
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 #include <REL/Relocation.h>

@@ -7,51 +7,44 @@ using namespace RE::BSScript;
 using namespace SKSE;
 using namespace SKSE::log;
 using namespace SKSE::stl;
-class morphFunctor : public IFunctionArguments {
-public:
-    morphFunctor(const RE::BSFixedString& a_eventName, RE::TESObjectREFR* actor)
-        : m_eventName(a_eventName.data()), m_actor(actor) {}
-    bool operator()(RE::BSScrapArray<RE::BSScript::Variable>& a_dst) const { 
-        RE::BSScript::IVirtualMachine* registry = RE::SkyrimVM::GetSingleton()->impl.get();
 
-        a_dst.resize(1);
-        RE::BSScript::PackValue(dst->Get(0), &m_actor, registry);
-
-        return true; 
-    };
-    void Run(){
-        RE::BSScript::IVirtualMachine* registry = RE::SkyrimVM::GetSingleton()->impl.get();
-        // skyVM->impl->DispatchMethodCall2();
-        registry->SendEventAll(m_eventName, this);
-    }
-
-private:
-    RE::BSFixedString m_eventName;
-    RE::TESObjectREFR* m_actor;
-};
-class actorSizeUpdate : public IFunctionArguments {
-public:
-    actorSizeUpdate(const RE::BSFixedString& a_eventName, RE::TESForm* receiver, RE::TESObjectREFR* actor)
-        : m_eventName(a_eventName.data()), m_actor(actor), m_receiver(receiver) {}
-
-    void Run() {
-        RE::BSScript::IVirtualMachine* registry = RE::SkyrimVM::GetSingleton()->impl.get();
-        RE::BSScript::IObjectHandlePolicy* policy = registry->GetObjectHandlePolicy();
-
-        RE::TESForm* aQuest = RE::TESDataHandler::GetSingleton()->LookupForm<RE::TESForm>(0x0D70, "State of Dress.esp");
-        std::uint64_t handle = policy->GetHandleForObject(aQuest->GetFormType(), aQuest);
-        // skyVM->impl->DispatchMethodCall2();
-        registry->SendEventAll(m_eventName, this);
-    }
-
-private:
-    RE::BSFixedString m_eventName;
-    RE::TESForm* m_receiver;
-    RE::TESObjectREFR* m_actor;
-};
 namespace {
     const std::string PapyrusClassName = "State of Dress";
     constexpr std::uint32_t serializationDataVersion = 1;
+    const SKSE::SerializationInterface* g_serialization;
+
+    SKSE::RegistrationSet<const RE::TESObjectREFR*> evt{"morphCatch"sv};
+    void Serialization_Revert(SKSE::SerializationInterface* serializationInterface) {
+        logger::info("Serialization_revert begin");
+        evt.Revert(serializationInterface);
+    }
+    void Serialization_Save(SKSE::SerializationInterface* serializationInterface) {
+        logger::info("Serialization_Save begin");
+        evt.Save(serializationInterface, 'MRPH', 1);
+
+        logger::info("Serialization_Save end");
+    }
+    void Serialization_Load(SKSE::SerializationInterface* serializationInterface) {
+        
+        logger::info("Serialization_Load begin");
+        std::uint32_t type;
+        std::uint32_t version;
+        std::uint32_t length;
+        while (serializationInterface->GetNextRecordInfo(type, version, length)) {
+            switch (type) {
+                case 'MRPH' : {
+                evt.Load(serializationInterface);
+                break;}
+            }
+        }
+
+
+        //logger::info("Serialization_Load end");
+    }
+    void Serialization_FormDelete(RE::VMHandle a_handle) { 
+        logger::info("Serialization_delete begin");
+        evt.Unregister(a_handle);
+    }
     /**
      * Setup logging.
      *
@@ -87,14 +80,16 @@ namespace {
     }
     
     
-
-   
+   std::vector<RE::TESForm*> eventSink{};
+    std::vector<RE::ActiveEffect*> eventAMESink{};
     InterfaceExchangeMessage _nioInterface = InterfaceExchangeMessage{};
     IBodyMorphInterface* g_bodyMorphInterface;
     void updateModelWeight(RE::StaticFunctionTag* func, RE::TESObjectREFR* ref) {
-        logger::info("update");
-        morphFunctor fn = morphFunctor(RE::BSFixedString("morphCatch"), ref);
-        fn.Run();
+        RE::BSScript::IVirtualMachine* registry = RE::SkyrimVM::GetSingleton()->impl.get();
+        // skyVM->impl->DispatchMethodCall2();
+        //RE::TESForm* aQuest = RE::TESDataHandler::GetSingleton()->LookupForm(0x0D70, "State of Dress.esp");
+        evt.SendEvent(ref);
+        
         g_bodyMorphInterface->UpdateModelWeight(ref);
         
     }
@@ -103,23 +98,46 @@ namespace {
         g_bodyMorphInterface->SetMorph(ref, morphName.c_str(), keyName.c_str(), avalue);
         
     }
-    void RegisterForMorphEvent(RE::StaticFunctionTag*, RE::BSFixedString eventName, RE::TESForm* aForm) {
+    void RegisterForMorphEvent(RE::StaticFunctionTag*, RE::TESForm* aForm) { evt.Register(aForm); }
 
+    void RegisterForMorphEventAME(RE::StaticFunctionTag*, RE::ActiveEffect* aForm) {
+        evt.Register(aForm);
     }
+
     bool RegisterFuncs(RE::BSScript::IVirtualMachine* registry) {
         //registry->RegisterFunction("SetBodyMorph", "NiOverride", setBodyMorph, true);
         registry->RegisterFunction("UpdateModelWeight", "NiOverride", updateModelWeight, true);
-        //registry->RegisterFunction("RegisterForMorphEvent", "SoD_SKSE", RegisterForMorphEvent);
+        registry->RegisterFunction("RegisterForMorphEvent", "SoD_SKSE", RegisterForMorphEvent);
+        registry->RegisterFunction("RegisterForMorphEventAME", "SoD_SKSE", RegisterForMorphEventAME);
         return true;
     }
 
     void InitializePapyrus() {
+
         log::trace("Initializing Papyrus binding...");
         if (GetPapyrusInterface()->Register(RegisterFuncs)) {
             log::debug("Papyrus functions bound.");
         } else {
             stl::report_and_fail("Failure to register Papyrus bindings.");
         }
+    }
+    void overwriteModelWeight() {
+        if (_nioInterface.interfaceMap) {
+            
+            g_bodyMorphInterface =
+                dynamic_cast<IBodyMorphInterface*>(_nioInterface.interfaceMap->QueryInterface("BodyMorph"));
+            log::trace("Overwriting UpdateModelWeight()");
+            if (GetPapyrusInterface()->Register([](RE::BSScript::IVirtualMachine* registry) {
+                    registry->RegisterFunction("UpdateModelWeight", "NiOverride", updateModelWeight, true);
+                    return true;
+                })) {
+                log::debug("UpdateModelWeight() overwritten");
+            } else {
+                stl::report_and_fail("Failure to overwrite.");
+            }
+            
+        } else
+            logger::debug("failed to retrieve interface");
     }
     bool newGame = false;
     inline constexpr REL::ID Vtbl(static_cast<std::uint64_t>(208040));
@@ -144,7 +162,8 @@ namespace {
                 }
                 // Skyrim game events.
                 case MessagingInterface::kNewGame: {  // Player starts a new game from main menu.
-                    newGame = true;
+                    if (!g_bodyMorphInterface)
+                    overwriteModelWeight();
                     
                     break;
                 }
@@ -152,23 +171,12 @@ namespace {
                     break;
                     // Data will be the name of the loaded save.
                 case MessagingInterface::kPostLoadGame: {  // Player's selected save game has finished loading.
-                    if (_nioInterface.interfaceMap) {
-                        logger::info("retrieved interface");
-                        g_bodyMorphInterface = dynamic_cast<IBodyMorphInterface*>(_nioInterface.interfaceMap->QueryInterface("BodyMorph"));
-                        InitializePapyrus();
-                    };
+                    if (!g_bodyMorphInterface) overwriteModelWeight();
                     break;
                 }
                     // Data will be a boolean indicating whether the load was successful.
                 case MessagingInterface::kSaveGame: {  // The player has saved a game.
                     // Data will be the save name.
-                    if (newGame)
-                        if (_nioInterface.interfaceMap) {
-                            logger::info("retrieved interface");
-                            g_bodyMorphInterface =
-                                dynamic_cast<IBodyMorphInterface*>(_nioInterface.interfaceMap->QueryInterface("BodyMorph"));
-                            InitializePapyrus();
-                        };
                     break;
                 }
                 case MessagingInterface::kDeleteGame: // The player deleted a saved game from within the load menu.
@@ -201,15 +209,18 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
     Init(skse);
     InitializeMessaging();
+    InitializePapyrus();
     // configuration
     //auto skyVM = RE::SkyrimVM::GetSingleton();
     //auto classVM = skyVM->impl->GetObjectHandlePolicy();
     
     //classVM->GetHandleForObject();
-
-    //g_serialization->SetRevertCallback(Serialization_Revert);
-    //g_serialization->SetSaveCallback(Serialization_Save);
-    //g_serialization->SetLoadCallback(Serialization_Load);
+    g_serialization = GetSerializationInterface();
+    g_serialization->SetUniqueID(_byteswap_ulong('SODS'));
+    g_serialization->SetFormDeleteCallback(Serialization_FormDelete);
+    g_serialization->SetSaveCallback(Serialization_Save);
+    g_serialization->SetRevertCallback(Serialization_Revert);
+    g_serialization->SetLoadCallback(Serialization_Load);
     log::info("{} has finished loading.", plugin->GetName());
     return true;
 }
