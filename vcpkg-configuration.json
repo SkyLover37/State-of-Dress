@@ -1,27 +1,30 @@
 {
-  "default-registry": {
-    "kind": "git",
-    "baseline": "1c5a340f6e10985e2d92af174a68dbd15c1fa4e1",
-    "repository": "https://github.com/microsoft/vcpkg.git"
-  },
   "registries": [
+    {
+      "kind": "git",
+      "baseline": "51475feaccb720ab40e5a0e3f8da70a4510defc0",
+      "repository": "https://github.com/microsoft/vcpkg.git",
+      "packages": [
+        "*",
+        "type-safe",
+        "boost-filesystem",
+        "freetype",
+        "nlohmann-json",
+        "imgui"
+          
+        
+      ]
+    },
     {
       "kind": "git",
       "baseline": "6309841a1ce770409708a67a9ba5c26c537d2937",
       "repository": "https://gitlab.com/colorglass/vcpkg-colorglass",
       "packages": [
         "bethesda-skyrim-scripts",
+        
         "commonlibsse-ng",
         "script-extender-common",
         "skse"
-      ]
-    },
-    {
-      "kind": "git",
-      "baseline": "05187375e8c7b25b7f87cb411a1ac64bfcc7e99c",
-      "repository": "https://github.com/expired6978/SKSE64Plugins.git",
-      "packages": [
-        "skee64"
       ]
     }
   ]

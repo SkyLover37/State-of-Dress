@@ -21,9 +21,38 @@ configure_file(
         @ONLY)
 
 set(headers
-        include/SkillExperienceBuffer.h)
+        #src/IPluginInterface.h
+        include/SkillExperienceBuffer.h
+        src/Animation/TimeBounceInterpolator.h
+        src/Animation/TimeColorInterpolator.h
+        src/Animation/TimeTrapezoidInterpolator.h
+        src/Animation/TimeInterpolator/TimeFloatInterpolator.h
+        src/Animation/TimeInterpolator/TimeInterpolatorManager.h
+        src/Rendering/Drawer.h
+        src/Rendering/RenderManager.h
+        src/Rendering/TextureManager.h
+        src/utilities/Utils.h
+        #src/UserInput/Controls.h
+        src/UserInput/Input.h
+        src/lib/imgui_freetype.h
+        src/lib/nanosvg.h
+        src/lib/nanosvgrast.h
+        )
 set(sources
         src/Main.cpp
+        
+        src/Animation/TimeBounceInterpolator.cpp
+        src/Animation/TimeColorInterpolator.cpp
+        src/Animation/TimeTrapezoidInterpolator.cpp
+        src/lib/imgui_freetype.cpp
+        src/Animation/TimeInterpolator/TimeFloatInterpolator.cpp
+        src/Animation/TimeInterpolator/TimeInterpolatorManager.cpp
+        src/Rendering/Drawer.cpp
+        src/Rendering/RenderManager.cpp
+        src/Rendering/TextureManager.cpp
+        src/utilities/Utils.cpp
+        #src/UserInput/Controls.cpp
+        src/UserInput/Input.cpp
         src/SkillExperienceBuffer.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 
@@ -47,16 +76,32 @@ find_package(CommonLibSSE CONFIG REQUIRED)
 
 add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources})
 add_library("${PROJECT_NAME}::${PROJECT_NAME}" ALIAS "${PROJECT_NAME}")
-
+find_package(imgui REQUIRED)
+find_package(Freetype REQUIRED)
 target_include_directories(${PROJECT_NAME}
         PRIVATE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/src>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Rendering>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Utilities>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/UserInput>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Animation>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Animation/TimeInteroplator>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Animation/lib>
         $<INSTALL_INTERFACE:src>)
-
+target_link_libraries(${PROJECT_NAME} PUBLIC 
+imgui::imgui
+Freetype::Freetype)
 target_include_directories(${PROJECT_NAME}
         PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Rendering>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Utilities>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/UserInput>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Animation>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Animation/TimeInteroplator>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/Animation/lib>
+        )
 
 target_precompile_headers(${PROJECT_NAME}
         PRIVATE
@@ -75,7 +120,7 @@ install(TARGETS ${PROJECT_NAME}
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(BUILD_NAME "Debug")
 else()
-    set(BUILD_NAME "Release")
+    set(BUILD_NAME "Release") 
 endif()
 install(DIRECTORY DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Distribution/Papyrus${BUILD_NAME}/")
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

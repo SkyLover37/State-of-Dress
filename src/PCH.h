@@ -1,5 +1,7 @@
 #pragma once
 
+
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include <cassert>
 #include <cctype>
 #include <cerrno>
@@ -94,11 +96,16 @@
 #include <variant>
 #include <vector>
 #include <version>
-#include <skee64/IPluginInterface.h>
+#include <IPluginInterface.h>
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 #include <REL/Relocation.h>
+#include <RE/B/BSRenderManager.h>
+//#include <Utils.h>
 
+#include "imgui.h"
+//#include <UserInput/Input.h>
+//#include <UserInput/Controls.h>
 #include <ShlObj_core.h>
 #include <Windows.h>
 #include <Psapi.h>
@@ -118,3 +125,22 @@ namespace logger = SKSE::log;
 namespace util {
     using SKSE::stl::report_and_fail;
 }
+namespace std {
+    template <class T>
+    struct hash<RE::BSPointerHandle<T>> {
+        uint32_t operator()(const RE::BSPointerHandle<T>& a_handle) const {
+            uint32_t nativeHandle = const_cast<RE::BSPointerHandle<T>*>(&a_handle)->native_handle();  // ugh
+            return nativeHandle;
+        }
+    };
+}  // namespace std
+#define RELOCATION_OFFSET(SE, AE) REL::VariantOffset(SE, AE, 0).offset()
+#define IM_PI 3.14159265358979323846f
+struct DrawArgs
+{
+    double alphaMult = 1.0f;
+    float scaleMult = 1.0f;
+    float rotationOffset = 0.0f;
+    ImVec2 translationOffset = ImVec2(0.0f, 0.0f);
+    bool centerObject = true;
+};

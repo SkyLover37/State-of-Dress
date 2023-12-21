@@ -26,12 +26,23 @@
     "plugin": {
       "description": "Build the SKSE plugin.",
       "dependencies": [
-        "commonlibsse-ng"
+        "commonlibsse-ng",
+        "type-safe",
+        "freetype",
+        "nlohmann-json",
+        {
+          "name": "imgui",
+          "features": [
+            "dx11-binding",
+            "win32-binding"
+          ]
+        }
       ]
     }
   },
   "default-features": [
     "scripts-dev",
     "plugin"
-  ]
+  ],
+  "builtin-baseline": "cd5e746ec203c8c3c61647e0886a8df8c1e78e41"
 }

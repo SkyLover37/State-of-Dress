@@ -1,0 +1,168 @@
+#include "Input.h"
+
+#include <WinUser.h>
+#include <Windows.h>
+#include <dinput.h>
+
+#include <imgui.h>
+
+
+//#include "bin/Wheeler/Wheeler.h"
+//#include "Controls.h"
+#define IM_VK_KEYPAD_ENTER (VK_RETURN + 256)
+
+class CharEvent : public RE::InputEvent
+{
+public:
+	uint32_t keyCode;  // 18 (ascii code)
+};
+
+
+static enum : std::uint32_t
+{
+	kInvalid = static_cast<std::uint32_t>(-1),
+	kKeyboardOffset = 0,
+	kMouseOffset = 256,
+	kGamepadOffset = 266
+};
+			
+static inline std::uint32_t GetGamepadIndex(RE::BSWin32GamepadDevice::Key a_key)
+{
+	using Key = RE::BSWin32GamepadDevice::Key;
+
+	std::uint32_t index;
+	switch (a_key) {
+	case Key::kUp:
+		index = 0;
+		break;
+	case Key::kDown:
+		index = 1;
+		break;
+	case Key::kLeft:
+		index = 2;
+		break;
+	case Key::kRight:
+		index = 3;
+		break;
+	case Key::kStart:
+		index = 4;
+		break;
+	case Key::kBack:
+		index = 5;
+		break;
+	case Key::kLeftThumb:
+		index = 6;
+		break;
+	case Key::kRightThumb:
+		index = 7;
+		break;
+	case Key::kLeftShoulder:
+		index = 8;
+		break;
+	case Key::kRightShoulder:
+		index = 9;
+		break;
+	case Key::kA:
+		index = 10;
+		break;
+	case Key::kB:
+		index = 11;
+		break;
+	case Key::kX:
+		index = 12;
+		break;
+	case Key::kY:
+		index = 13;
+		break;
+	case Key::kLeftTrigger:
+		index = 14;
+		break;
+	case Key::kRightTrigger:
+		index = 15;
+		break;
+	default:
+		index = kInvalid;
+		break;
+	}
+
+	return index != kInvalid ? index + kGamepadOffset : kInvalid;
+}
+void Input::ProcessAndFilter(const RE::InputEvent* event)
+{
+    bool shouldDispatch = true;
+    auto eventType = event->eventType;
+    // update cursor pos only if the wheel is open, and hence block dispatch of thumbstick/mouse event to game
+    if (event->eventType == RE::INPUT_EVENT_TYPE::kMouseMove) {
+        //if (wheelerOpen) {
+            const RE::MouseMoveEvent* mouseMove = static_cast<const RE::MouseMoveEvent*>(event->AsIDEvent());
+            // Wheeler::UpdateCursorPosMouse(mouseMove->mouseInputX, mouseMove->mouseInputY);
+            shouldDispatch = false;  // block mouse input when wheel is open
+        //}
+    } else if (event->eventType == RE::INPUT_EVENT_TYPE::kThumbstick) {
+        //if (wheelerOpen) {
+            const RE::ThumbstickEvent* thumbstick = static_cast<const RE::ThumbstickEvent*>(event);
+            if (thumbstick->IsRight()) {
+                // Wheeler::UpdateCursorPosGamepad(thumbstick->xValue, thumbstick->yValue);
+                shouldDispatch = false;  // block thumbstick right input when wheel is open
+            }
+        //}
+    } else if (event->eventType == RE::INPUT_EVENT_TYPE::kButton) {
+        const auto button = static_cast<const RE::ButtonEvent*>(event);
+        if (button) {
+            uint32_t input = button->GetIDCode();
+            using DeviceType = RE::INPUT_DEVICE;
+            bool isGamePad = false;
+            RE::INPUT_DEVICE device = button->device.get();
+            switch (device) {
+                case DeviceType::kMouse:
+                    input += kMouseOffset;
+                    break;
+                case DeviceType::kKeyboard:
+                    input += kKeyboardOffset;
+                    break;
+                case DeviceType::kGamepad:
+                    input = GetGamepadIndex((RE::BSWin32GamepadDevice::Key)input);
+                    isGamePad = true;
+                    break;
+            }
+            bool isKeyBound = false;
+            //Controls::IsKeyBound(input);
+            //if (wheelerOpen) {
+                if (isKeyBound) {
+                    shouldDispatch = false;  // block button input when wheel is open, regardless of whether
+                                             // it's down, up, pressed
+                } else {
+                    RE::ControlMap* ctrlMap = RE::ControlMap::GetSingleton();
+                    if (ctrlMap) {  // filter out inputs like opening tween menu to avoid some consistency
+                                    // issues
+                        shouldDispatch = !EventsToFilterWhenWheelerActive.contains(
+                            std::string(ctrlMap->GetUserEventName(input, device)));
+                    }
+                }
+            //}
+            if (isKeyBound) {
+                if (button->IsDown() || button->IsUp()) {
+                    // dispatch no matter if wheeler is open, wheeler will handle dispatched logic.
+                    //Controls::Dispatch(input, button->IsDown(), isGamePad);
+                }
+            }
+        }
+    }
+}
+RE::BSEventNotifyControl Input::ProcessEvent(const RE::InputEvent* a_event,
+                                      RE::BSTEventSource<RE::InputEvent>* a_eventSource) {
+    if (!a_event) {
+        return RE::BSEventNotifyControl::kContinue;
+    }
+    bool wheelerOpen = true;
+    ProcessAndFilter(a_event);
+    // Wheeler::IsWheelerOpen();
+    RE::InputEvent* aevent = a_event->next;
+    RE::InputEvent* prev = nullptr;
+    while (aevent != nullptr) {
+        bool shouldDispatch = true;
+        ProcessAndFilter(aevent);
+        aevent->next;
+    }
+    return RE::BSEventNotifyControl::kContinue;
+}
